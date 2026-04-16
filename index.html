@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <title>Metal Prices</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --text: #f4f4f5;
+      --accent: #ffffff;
+      --card: #0f0f10;
+      --border: #262628;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .card {
+      width: fit-content;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: grid;
+      gap: 10px;
+    }
+    .nav-btn {
+      display: inline-block;
+      text-decoration: none;
+      background: var(--accent);
+      color: #141414;
+      border-radius: 10px;
+      padding: 12px 18px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .nav-btn:hover {
+      filter: brightness(1.05);
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <a class="nav-btn" href="./metals.html">Metal Prices</a>
+    <a class="nav-btn" href="./tracking.html">COC</a>
+  </main>
+</body>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+</script>
+</html>
