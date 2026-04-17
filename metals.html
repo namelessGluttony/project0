@@ -539,13 +539,31 @@
       if (!ctx || !latestGoldData || !latestSilverData) return;
 
       const trendData = readTrendStore(selectedCity);
-      const points = trendData
+      let points = trendData
         .filter((row) => row.qty === selectedQty)
         .sort((a, b) => a.date.localeCompare(b.date))
         .slice(-selectedRangeDays);
       if (!points.length) {
-        chartTitle.textContent = selectedRangeDays + "-day trend (" + selectedQty + "g): no history yet";
-        return;
+        const g24 = metricForGrams((latestGoldData.metalMetrics || {}).gold24, selectedQty);
+        const s = metricForGrams((latestSilverData.metalMetrics || {}).silver, selectedQty);
+        if (!g24 || !s) {
+          chartTitle.textContent = selectedRangeDays + "-day trend (" + selectedQty + "g): no history yet";
+          return;
+        }
+        points = [
+          {
+            date: "Yesterday",
+            qty: selectedQty,
+            gold: Number(g24.yesterdayPrice) || 0,
+            silver: Number(s.yesterdayPrice) || 0
+          },
+          {
+            date: "Today",
+            qty: selectedQty,
+            gold: Number(g24.todayPrice) || 0,
+            silver: Number(s.todayPrice) || 0
+          }
+        ];
       }
 
       const w = chartCanvas.width;
@@ -561,6 +579,15 @@
       const padX = 28;
       const padY = 16;
       const step = points.length > 1 ? (w - padX * 2) / (points.length - 1) : 0;
+
+      ctx.strokeStyle = "#1f2024";
+      for (let i = 1; i <= 3; i += 1) {
+        const gy = padY + ((h - padY * 2) * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padX, gy);
+        ctx.lineTo(w - padX, gy);
+        ctx.stroke();
+      }
 
       ctx.strokeStyle = "#2a2a2f";
       ctx.beginPath();
@@ -595,7 +622,31 @@
       drawSeries("gold", "#f5c542");
       drawSeries("silver", "#c0c0c0");
 
-      chartTitle.textContent = selectedRangeDays + "-day trend (" + selectedQty + "g): Gold vs Silver";
+      const fmt = new Intl.NumberFormat("en-IN", { notation: "compact", maximumFractionDigits: 1 });
+      const last = points[points.length - 1];
+      const drawBadge = (text, x, y, bg, fg) => {
+        ctx.font = "12px Segoe UI";
+        const pad = 6;
+        const tw = ctx.measureText(text).width;
+        const bw = tw + pad * 2;
+        const bh = 18;
+        const bx = Math.max(4, Math.min(w - bw - 4, x + 8));
+        const by = Math.max(4, Math.min(h - bh - 4, y - 24));
+        ctx.fillStyle = bg;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = fg;
+        ctx.fillText(text, bx + pad, by + 13);
+      };
+      const lx = padX + (points.length - 1) * step;
+      const gy = h - padY - ((last.gold - min) / span) * (h - padY * 2);
+      const sy = h - padY - ((last.silver - min) / span) * (h - padY * 2);
+      drawBadge("Gold " + fmt.format(last.gold), lx, gy, "#f5c542", "#111");
+      drawBadge("Silver " + fmt.format(last.silver), lx, sy + 20, "#c0c0c0", "#111");
+
+      const liveFallback = points.length === 2 && points[0].date === "Yesterday" && points[1].date === "Today";
+      chartTitle.textContent = liveFallback
+        ? "Live compare (" + selectedQty + "g): Yesterday vs Today"
+        : selectedRangeDays + "-day trend (" + selectedQty + "g): Gold vs Silver";
     }
 
     function setLoading(loading) {
