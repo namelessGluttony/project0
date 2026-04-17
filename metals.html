@@ -4,6 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#000000">
+  <meta name="description" content="Live gold and silver prices by city in India with quantity filters, auto-refresh, cache fallback, and trend view.">
+  <meta name="robots" content="index,follow">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Metal Prices Today">
+  <meta property="og:description" content="Track live metal rates, compare daily movement, and view 7-day/30-day trends.">
+  <meta property="og:url" content="./metals.html">
+  <meta property="og:site_name" content="Metal Prices">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Metal Prices Today">
+  <meta name="twitter:description" content="Live gold and silver rates with city, quantity, and trend filters.">
   <link rel="manifest" href="./manifest.webmanifest">
   <title>Metal Prices Today</title>
   <style>
@@ -73,6 +83,11 @@
       gap: 12px;
       align-items: end;
     }
+    .toolbar-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
     .field {
       display: grid;
       gap: 4px;
@@ -112,6 +127,11 @@
     .action-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .metal-section {
       margin-top: 16px;
@@ -194,6 +214,26 @@
       font-size: 0.9rem;
       color: #d8d8df;
     }
+    .trend-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .trend-btn {
+      border: 1px solid #2f2f33;
+      background: #0e0f12;
+      color: #e5e7eb;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .trend-btn.active {
+      background: #f5c542;
+      color: #111;
+      border-color: #f5c542;
+      font-weight: 700;
+    }
     #trendChart {
       width: 100%;
       height: 120px;
@@ -229,13 +269,53 @@
     @media (max-width: 980px) {
       .page-grid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 720px) {
+      body {
+        padding: 12px;
+      }
+      .card {
+        padding: 14px;
+      }
+      .top-row {
+        flex-wrap: wrap;
+      }
+      .toolbar {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+        gap: 10px;
+      }
+      .toolbar-actions {
+        width: 100%;
+      }
+      .toolbar-actions .action-btn {
+        flex: 1 1 100%;
+      }
+      th, td {
+        padding: 8px 5px;
+        font-size: 0.84rem;
+      }
+      #trendChart {
+        height: 150px;
+      }
+    }
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 1.1rem;
+      }
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+      .yesterday-col,
+      .delta-col {
+        display: none;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="page-grid">
     <main class="card">
       <div class="top-row">
-        <h1>Bangalore Metal Rates</h1>
+        <h1>Metal Rates</h1>
         <a class="back-link" href="./index.html">Back</a>
       </div>
       <div id="status">Loading...</div>
@@ -273,7 +353,10 @@
         </div>
         <div class="field">
           <label>&nbsp;</label>
-          <button class="action-btn" id="exportBtn">Copy to Clipboard</button>
+          <div class="toolbar-actions">
+            <button class="action-btn" id="detectCityBtn" type="button">Use My Location</button>
+            <button class="action-btn" id="exportBtn" type="button">Copy to Clipboard</button>
+          </div>
         </div>
       </div>
 
@@ -291,36 +374,44 @@
 
       <section id="goldSection" class="metal-section" hidden>
         <h2 class="metal-title"><span class="metal-icon gold-biscuit" aria-hidden="true"></span><span class="sr-only">Gold</span></h2>
-        <table id="goldTable">
-          <thead>
-            <tr>
-              <th>Karat</th>
-              <th>Today (INR)</th>
-              <th class="yesterday-col">Yesterday (INR)</th>
-              <th class="delta-col">Change vs yesterday</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-wrap">
+          <table id="goldTable">
+            <thead>
+              <tr>
+                <th>Karat</th>
+                <th>Today (INR)</th>
+                <th class="yesterday-col">Yesterday (INR)</th>
+                <th class="delta-col">Change vs yesterday</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </section>
 
       <section id="silverSection" class="metal-section" hidden>
         <h2 class="metal-title"><span class="metal-icon silver-biscuit" aria-hidden="true"></span><span class="sr-only">Silver</span></h2>
-        <table id="silverTable">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Today (INR)</th>
-              <th class="yesterday-col">Yesterday (INR)</th>
-              <th class="delta-col">Change vs yesterday</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <div class="table-wrap">
+          <table id="silverTable">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Today (INR)</th>
+                <th class="yesterday-col">Yesterday (INR)</th>
+                <th class="delta-col">Change vs yesterday</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </section>
 
       <div class="chart-wrap">
-        <p class="chart-title" id="chartTitle">Mini trend (selected qty)</p>
+        <div class="trend-controls">
+          <button class="trend-btn active" id="trend7Btn" type="button">7 days</button>
+          <button class="trend-btn" id="trend30Btn" type="button">30 days</button>
+        </div>
+        <p class="chart-title" id="chartTitle">Trend (selected qty)</p>
         <canvas id="trendChart" width="700" height="120"></canvas>
       </div>
     </main>
@@ -337,6 +428,7 @@
     const refreshSelect = document.getElementById("refreshSelect");
     const exportBtn = document.getElementById("exportBtn");
     const retryBtn = document.getElementById("retryBtn");
+    const detectCityBtn = document.getElementById("detectCityBtn");
     const errorBox = document.getElementById("errorBox");
     const skeleton = document.getElementById("skeleton");
     const goldSection = document.getElementById("goldSection");
@@ -345,13 +437,26 @@
     const silverTbody = document.querySelector("#silverTable tbody");
     const chartTitle = document.getElementById("chartTitle");
     const chartCanvas = document.getElementById("trendChart");
+    const trend7Btn = document.getElementById("trend7Btn");
+    const trend30Btn = document.getElementById("trend30Btn");
 
     let timer = null;
     let isLoading = false;
     let selectedQty = 1;
     let selectedCity = "bangalore";
+    let selectedRangeDays = 7;
+    let cityManuallySelected = false;
     let latestGoldData = null;
     let latestSilverData = null;
+    const CACHE_PREFIX = "metal-rates-cache-v1:";
+    const TREND_PREFIX = "metal-rates-trend-v1:";
+    const CITY_COORDS = {
+      bangalore: { lat: 12.9716, lon: 77.5946, label: "Bangalore" },
+      mumbai: { lat: 19.0760, lon: 72.8777, label: "Mumbai" },
+      chennai: { lat: 13.0827, lon: 80.2707, label: "Chennai" },
+      delhi: { lat: 28.6139, lon: 77.2090, label: "Delhi" },
+      hyderabad: { lat: 17.3850, lon: 78.4867, label: "Hyderabad" }
+    };
 
     function endpoint(metal, city) {
       return API_BASE + "&metal=" + metal + "&city=" + encodeURIComponent(city);
@@ -433,14 +538,15 @@
       const ctx = chartCanvas.getContext("2d");
       if (!ctx || !latestGoldData || !latestSilverData) return;
 
-      const gold24 = metricForGrams((latestGoldData.metalMetrics || {}).gold24, selectedQty);
-      const silver = metricForGrams((latestSilverData.metalMetrics || {}).silver, selectedQty);
-      const points = [
-        { label: "Gold-Y", value: gold24 ? gold24.yesterdayPrice : 0, color: "#a1a1aa" },
-        { label: "Gold-T", value: gold24 ? gold24.todayPrice : 0, color: "#f5c542" },
-        { label: "Silver-Y", value: silver ? silver.yesterdayPrice : 0, color: "#7f8ea3" },
-        { label: "Silver-T", value: silver ? silver.todayPrice : 0, color: "#c0c0c0" }
-      ];
+      const trendData = readTrendStore(selectedCity);
+      const points = trendData
+        .filter((row) => row.qty === selectedQty)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(-selectedRangeDays);
+      if (!points.length) {
+        chartTitle.textContent = selectedRangeDays + "-day trend (" + selectedQty + "g): no history yet";
+        return;
+      }
 
       const w = chartCanvas.width;
       const h = chartCanvas.height;
@@ -448,13 +554,13 @@
       ctx.fillStyle = "#0c0c0d";
       ctx.fillRect(0, 0, w, h);
 
-      const vals = points.map((p) => p.value);
+      const vals = points.flatMap((p) => [p.gold, p.silver]).filter((v) => typeof v === "number");
       const min = Math.min(...vals, 0);
       const max = Math.max(...vals, 1);
       const span = Math.max(max - min, 1);
       const padX = 28;
       const padY = 16;
-      const step = (w - padX * 2) / (points.length - 1);
+      const step = points.length > 1 ? (w - padX * 2) / (points.length - 1) : 0;
 
       ctx.strokeStyle = "#2a2a2f";
       ctx.beginPath();
@@ -462,31 +568,34 @@
       ctx.lineTo(w - padX, h - padY);
       ctx.stroke();
 
-      ctx.lineWidth = 2;
-      for (let i = 1; i < points.length; i += 2) {
-        const p1 = points[i - 1];
-        const p2 = points[i];
-        const x1 = padX + (i - 1) * step;
-        const x2 = padX + i * step;
-        const y1 = h - padY - ((p1.value - min) / span) * (h - padY * 2);
-        const y2 = h - padY - ((p2.value - min) / span) * (h - padY * 2);
-        ctx.strokeStyle = p2.color;
+      const drawSeries = (key, color) => {
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+        points.forEach((p, i) => {
+          const value = p[key];
+          const x = padX + i * step;
+          const y = h - padY - ((value - min) / span) * (h - padY * 2);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
         ctx.stroke();
-      }
 
-      points.forEach((p, i) => {
-        const x = padX + i * step;
-        const y = h - padY - ((p.value - min) / span) * (h - padY * 2);
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      });
+        points.forEach((p, i) => {
+          const value = p[key];
+          const x = padX + i * step;
+          const y = h - padY - ((value - min) / span) * (h - padY * 2);
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      };
 
-      chartTitle.textContent = "Mini trend (" + selectedQty + "g): Yesterday vs Today";
+      drawSeries("gold", "#f5c542");
+      drawSeries("silver", "#c0c0c0");
+
+      chartTitle.textContent = selectedRangeDays + "-day trend (" + selectedQty + "g): Gold vs Silver";
     }
 
     function setLoading(loading) {
@@ -500,6 +609,131 @@
       if (timer) clearInterval(timer);
       const mins = Number(refreshSelect.value) || 1;
       timer = setInterval(loadMetalPrices, mins * 60 * 1000);
+    }
+
+    function cacheKey(city) {
+      return CACHE_PREFIX + city;
+    }
+
+    function trendKey(city) {
+      return TREND_PREFIX + city;
+    }
+
+    function readCache(city) {
+      try {
+        const raw = localStorage.getItem(cacheKey(city));
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function saveCache(city, goldData, silverData) {
+      try {
+        localStorage.setItem(cacheKey(city), JSON.stringify({
+          timestamp: Date.now(),
+          goldData,
+          silverData
+        }));
+      } catch {}
+    }
+
+    function readTrendStore(city) {
+      try {
+        const raw = localStorage.getItem(trendKey(city));
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
+    function saveTrendStore(city, history) {
+      try {
+        localStorage.setItem(trendKey(city), JSON.stringify(history));
+      } catch {}
+    }
+
+    function appendTrendSnapshot(city) {
+      if (!latestGoldData || !latestSilverData) return;
+      const today = new Date().toISOString().slice(0, 10);
+      const g24 = metricForGrams((latestGoldData.metalMetrics || {}).gold24, selectedQty);
+      const s = metricForGrams((latestSilverData.metalMetrics || {}).silver, selectedQty);
+      if (!g24 || !s) return;
+
+      const history = readTrendStore(city);
+      const idx = history.findIndex((row) => row.date === today && row.qty === selectedQty);
+      const snapshot = {
+        date: today,
+        qty: selectedQty,
+        gold: Number(g24.todayPrice) || 0,
+        silver: Number(s.todayPrice) || 0
+      };
+      if (idx >= 0) history[idx] = snapshot;
+      else history.push(snapshot);
+
+      const byQty = {};
+      history.forEach((row) => {
+        const k = String(row.qty);
+        if (!byQty[k]) byQty[k] = [];
+        byQty[k].push(row);
+      });
+      const trimmed = Object.keys(byQty).flatMap((k) =>
+        byQty[k].sort((a, b) => a.date.localeCompare(b.date)).slice(-30)
+      );
+      saveTrendStore(city, trimmed);
+    }
+
+    function cityLabel(cityCode) {
+      return (CITY_COORDS[cityCode] && CITY_COORDS[cityCode].label) || cityCode;
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const toRad = (n) => (n * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return 6371 * c;
+    }
+
+    function nearestSupportedCity(lat, lon) {
+      let best = { city: selectedCity, distanceKm: Number.POSITIVE_INFINITY };
+      Object.keys(CITY_COORDS).forEach((city) => {
+        const ref = CITY_COORDS[city];
+        const d = haversineKm(lat, lon, ref.lat, ref.lon);
+        if (d < best.distanceKm) best = { city, distanceKm: d };
+      });
+      return best;
+    }
+
+    function detectCityByLocation(isManualClick) {
+      if (!("geolocation" in navigator)) {
+        statusEl.textContent = "Geolocation is not available in this browser.";
+        return;
+      }
+      detectCityBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition((position) => {
+        const { latitude, longitude } = position.coords;
+        const nearest = nearestSupportedCity(latitude, longitude);
+        if (nearest.distanceKm > 500) {
+          statusEl.textContent = "Location found, but outside supported city range. Select city manually.";
+          detectCityBtn.disabled = false;
+          return;
+        }
+        selectedCity = nearest.city;
+        citySelect.value = selectedCity;
+        if (isManualClick) cityManuallySelected = true;
+        statusEl.textContent = "Using nearest supported city: " + cityLabel(selectedCity);
+        detectCityBtn.disabled = false;
+        loadMetalPrices();
+      }, () => {
+        statusEl.textContent = "Could not detect location. You can still choose city manually.";
+        detectCityBtn.disabled = false;
+      }, { enableHighAccuracy: false, timeout: 7000, maximumAge: 10 * 60 * 1000 });
     }
 
     async function loadMetalPrices() {
@@ -517,14 +751,26 @@
 
         latestGoldData = await goldResponse.json();
         latestSilverData = await silverResponse.json();
+        saveCache(selectedCity, latestGoldData, latestSilverData);
+        appendTrendSnapshot(selectedCity);
 
         renderTableRows();
         const now = new Date();
         statusEl.textContent = "Live rates loaded for " + citySelect.options[citySelect.selectedIndex].text;
         metaEl.textContent = "Last updated: " + now.toLocaleTimeString() + " | Auto-refresh: every " + refreshSelect.value + " min";
       } catch (error) {
-        errorBox.style.display = "block";
-        statusEl.textContent = "Could not load live rates.";
+        const cached = readCache(selectedCity);
+        if (cached && cached.goldData && cached.silverData) {
+          latestGoldData = cached.goldData;
+          latestSilverData = cached.silverData;
+          renderTableRows();
+          const cacheTime = new Date(cached.timestamp);
+          statusEl.textContent = "Offline mode: showing cached rates for " + cityLabel(selectedCity) + ".";
+          metaEl.textContent = "Last cache update: " + cacheTime.toLocaleString() + " | Auto-refresh: every " + refreshSelect.value + " min";
+        } else {
+          errorBox.style.display = "block";
+          statusEl.textContent = "Could not load live rates.";
+        }
       } finally {
         setLoading(false);
       }
@@ -560,12 +806,14 @@
 
     citySelect.addEventListener("change", () => {
       selectedCity = citySelect.value;
+      cityManuallySelected = true;
       loadMetalPrices();
     });
 
     qtySelect.addEventListener("change", () => {
       selectedQty = Number(qtySelect.value) || 1;
       applyQtyFilter();
+      appendTrendSnapshot(selectedCity);
       drawMiniTrend();
       metaEl.textContent = "Last updated: " + new Date().toLocaleTimeString() + " | Auto-refresh: every " + refreshSelect.value + " min";
     });
@@ -577,6 +825,21 @@
 
     exportBtn.addEventListener("click", exportSummary);
     retryBtn.addEventListener("click", loadMetalPrices);
+    detectCityBtn.addEventListener("click", () => detectCityByLocation(true));
+
+    trend7Btn.addEventListener("click", () => {
+      selectedRangeDays = 7;
+      trend7Btn.classList.add("active");
+      trend30Btn.classList.remove("active");
+      drawMiniTrend();
+    });
+
+    trend30Btn.addEventListener("click", () => {
+      selectedRangeDays = 30;
+      trend30Btn.classList.add("active");
+      trend7Btn.classList.remove("active");
+      drawMiniTrend();
+    });
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
@@ -585,6 +848,7 @@
     }
 
     scheduleRefresh();
+    if (!cityManuallySelected) detectCityByLocation(false);
     loadMetalPrices();
   </script>
 </body>
