@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Petrol Prices</title>
+  <style>
+    :root {
+      --bg: #050505;
+      --card: #111214;
+      --border: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --up: #4ade80;
+      --down: #f87171;
+      --flat: #a3a3a3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .card {
+      max-width: 860px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.35rem;
+    }
+    .meta {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .summary-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      background: #141518;
+    }
+    .summary-item strong {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.25px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 9px 6px;
+      text-align: left;
+    }
+    th {
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.25px;
+    }
+    .up { color: var(--up); font-weight: 600; }
+    .down { color: var(--down); font-weight: 600; }
+    .flat { color: var(--flat); font-weight: 600; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .btn {
+      background: #fff;
+      color: #121212;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .status {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Current Petrol Prices</h1>
+    <p class="meta">Live city-wise price per litre (INR).</p>
+
+    <div class="toolbar">
+      <button id="refreshBtn" class="btn" type="button">Refresh Now</button>
+      <span id="status" class="status">Loading live prices...</span>
+    </div>
+
+    <section class="summary">
+      <div class="summary-item">
+        <strong>Highest</strong>
+        <span id="highestText">-</span>
+      </div>
+      <div class="summary-item">
+        <strong>Lowest</strong>
+        <span id="lowestText">-</span>
+      </div>
+    </section>
+
+    <table>
+      <thead>
+        <tr>
+          <th>City</th>
+          <th>Today (INR/L)</th>
+          <th>Yesterday (INR/L)</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody id="priceBody"></tbody>
+    </table>
+  </main>
+
+  <script>
+    const CITIES = [
+      { label: "Bangalore", slug: "bangalore" },
+      { label: "Hyderabad", slug: "hyderabad" },
+      { label: "Guntur", slug: "guntur" }
+    ];
+    const REFRESH_MS = 5 * 60 * 1000;
+
+    const priceBody = document.getElementById("priceBody");
+    const highestText = document.getElementById("highestText");
+    const lowestText = document.getElementById("lowestText");
+    const statusEl = document.getElementById("status");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    let isLoading = false;
+
+    function money(value) {
+      if (value == null || Number.isNaN(value)) return "Not available";
+      return "₹" + value.toFixed(2);
+    }
+
+    function changeHtml(change) {
+      if (change == null || Number.isNaN(change)) return "Not available";
+      if (change > 0) return '<span class="up">▲ +' + money(change) + "</span>";
+      if (change < 0) return '<span class="down">▼ -' + money(Math.abs(change)) + "</span>";
+      return '<span class="flat">■ ' + money(0) + "</span>";
+    }
+
+    function endpoint(slug) {
+      const source = "https://r.jina.ai/http://www.goodreturns.in/petrol-price-in-" + slug + ".html";
+      return "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(source);
+    }
+
+    function parseNumber(value) {
+      if (!value) return null;
+      const cleaned = String(value).replace(/[^0-9.]/g, "");
+      if (!cleaned) return null;
+      const num = Number(cleaned);
+      return Number.isNaN(num) ? null : num;
+    }
+
+    function parsePriceText(markdown) {
+      const todayMatch = markdown.match(/at ₹\*\*([0-9]+(?:\.[0-9]+)?)\*\*/i);
+      const yesterdayMatch = markdown.match(/yesterday(?:'|’)?s rate of ₹\s*([0-9]+(?:\.[0-9]+)?)/i);
+      const deltaMatch = markdown.match(/\/ Ltr\s*([+-]\s*[0-9]+(?:\.[0-9]+)?)/i);
+
+      const today = parseNumber(todayMatch && todayMatch[1]);
+      let yesterday = parseNumber(yesterdayMatch && yesterdayMatch[1]);
+      let change = null;
+
+      if (today != null && yesterday != null) {
+        change = Number((today - yesterday).toFixed(2));
+      } else {
+        const delta = parseNumber(deltaMatch && deltaMatch[1]);
+        if (delta != null) {
+          const sign = /-/.test(deltaMatch[1]) ? -1 : 1;
+          change = Number((sign * delta).toFixed(2));
+          if (today != null) {
+            yesterday = Number((today - change).toFixed(2));
+          }
+        }
+      }
+
+      return { today, yesterday, change };
+    }
+
+    async function fetchCityPrice(city) {
+      const response = await fetch(endpoint(city.slug), {
+        headers: { accept: "text/plain" }
+      });
+      if (!response.ok) throw new Error("Failed for " + city.label);
+      const text = await response.text();
+      return { city: city.label, ...parsePriceText(text) };
+    }
+
+    function renderRows(rows) {
+      priceBody.innerHTML = "";
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + row.city + "</td>" +
+          "<td>" + money(row.today) + "</td>" +
+          "<td>" + money(row.yesterday) + "</td>" +
+          "<td>" + changeHtml(row.change) + "</td>";
+        priceBody.appendChild(tr);
+      });
+    }
+
+    function renderHighLow(rows) {
+      const valid = rows.filter((r) => typeof r.today === "number");
+      if (!valid.length) {
+        highestText.textContent = "-";
+        lowestText.textContent = "-";
+        return;
+      }
+      let highest = valid[0];
+      let lowest = valid[0];
+      valid.forEach((r) => {
+        if (r.today > highest.today) highest = r;
+        if (r.today < lowest.today) lowest = r;
+      });
+      highestText.textContent = highest.city + ": " + money(highest.today);
+      lowestText.textContent = lowest.city + ": " + money(lowest.today);
+    }
+
+    async function loadPrices() {
+      if (isLoading) return;
+      isLoading = true;
+      statusEl.textContent = "Loading live prices...";
+      refreshBtn.disabled = true;
+      try {
+        const rows = await Promise.all(CITIES.map(fetchCityPrice));
+        renderRows(rows);
+        renderHighLow(rows);
+        statusEl.textContent = "Last updated: " + new Date().toLocaleTimeString() + " | Auto-refresh: 5 min";
+      } catch (error) {
+        statusEl.textContent = "Live fetch failed. Try refresh again.";
+      } finally {
+        refreshBtn.disabled = false;
+        isLoading = false;
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadPrices);
+    loadPrices();
+    setInterval(loadPrices, REFRESH_MS);
+  </script>
+</body>
+</html>

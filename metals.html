@@ -564,6 +564,72 @@
       return "";
     }
 
+    function mapRowsByGram(metricList) {
+      const map = {};
+      if (!Array.isArray(metricList)) return map;
+      metricList.forEach((row) => {
+        if (row && typeof row.quantityInGrams === "number") {
+          map[row.quantityInGrams] = row;
+        }
+      });
+      return map;
+    }
+
+    function enrichMetricList(currentList, previousList) {
+      const currentMap = mapRowsByGram(currentList);
+      const previousMap = mapRowsByGram(previousList);
+      const grams = new Set([
+        ...Object.keys(currentMap).map(Number),
+        ...Object.keys(previousMap).map(Number)
+      ]);
+      let usedFallback = false;
+
+      const rows = Array.from(grams)
+        .sort((a, b) => a - b)
+        .map((g) => {
+          const curr = currentMap[g] ? { ...currentMap[g] } : { quantityInGrams: g };
+          const prev = previousMap[g];
+          if (curr.todayPrice == null && prev && prev.todayPrice != null) {
+            curr.todayPrice = prev.todayPrice;
+            usedFallback = true;
+          }
+          if (curr.yesterdayPrice == null && prev && prev.todayPrice != null) {
+            curr.yesterdayPrice = prev.todayPrice;
+            usedFallback = true;
+          }
+          if (curr.yesterdayPrice == null && curr.todayPrice != null) {
+            curr.yesterdayPrice = curr.todayPrice;
+            usedFallback = true;
+          }
+          if (curr.deviationFromLastPrice == null && curr.todayPrice != null && curr.yesterdayPrice != null) {
+            curr.deviationFromLastPrice = Number((curr.todayPrice - curr.yesterdayPrice).toFixed(2));
+            usedFallback = true;
+          }
+          return curr;
+        });
+
+      return { rows, usedFallback };
+    }
+
+    function enrichWithPreviousSnapshot(currentData, previousData) {
+      if (!currentData || !currentData.metalMetrics) return { data: currentData, usedFallback: false };
+      const currentMetrics = currentData.metalMetrics || {};
+      const previousMetrics = previousData && previousData.metalMetrics ? previousData.metalMetrics : {};
+      let usedFallback = false;
+
+      const resultMetrics = {};
+      Object.keys(currentMetrics).forEach((key) => {
+        const enriched = enrichMetricList(currentMetrics[key], previousMetrics[key]);
+        resultMetrics[key] = enriched.rows;
+        if (enriched.usedFallback) usedFallback = true;
+      });
+
+      return {
+        data: { ...currentData, metalMetrics: resultMetrics },
+        usedFallback
+      };
+    }
+
     function metricRowsFromPerGram(perGram, yesterdayPerGram) {
       return GRAMS.map((g) => ({
         quantityInGrams: g,
@@ -722,15 +788,23 @@
       statusEl.textContent = "Loading " + citySelect.options[citySelect.selectedIndex].text + " prices (" + serverLabel(selectedServer) + ")...";
 
       try {
+        const cachedBeforeLoad = readCache(selectedCity);
         const serverData = await loadFromSelectedServer();
-        latestGoldData = serverData.goldData;
-        latestSilverData = serverData.silverData;
+        const goldEnriched = enrichWithPreviousSnapshot(serverData.goldData, cachedBeforeLoad && cachedBeforeLoad.goldData);
+        const silverEnriched = enrichWithPreviousSnapshot(serverData.silverData, cachedBeforeLoad && cachedBeforeLoad.silverData);
+        latestGoldData = goldEnriched.data;
+        latestSilverData = silverEnriched.data;
         saveCache(selectedCity, latestGoldData, latestSilverData);
 
         renderTableRows();
         const now = new Date();
+        const usedFallback = goldEnriched.usedFallback || silverEnriched.usedFallback;
         statusEl.textContent = "Live rates loaded for " + citySelect.options[citySelect.selectedIndex].text + " via " + serverLabel(selectedServer);
-        metaEl.textContent = "Last updated: " + now.toLocaleTimeString() + " | Server: " + serverLabel(selectedServer) + " | Auto-refresh: every " + refreshSelect.value + " min";
+        metaEl.textContent =
+          "Last updated: " + now.toLocaleTimeString() +
+          " | Server: " + serverLabel(selectedServer) +
+          (usedFallback ? " | Compare values derived from previous snapshot" : "") +
+          " | Auto-refresh: every " + refreshSelect.value + " min";
       } catch (error) {
         const cached = readCache(selectedCity);
         if (cached && cached.goldData && cached.silverData) {
